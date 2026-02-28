@@ -97,14 +97,50 @@ class KWSModel(pl.LightningModule):
         # and apply it if needed
         if self.hparams.adversarial_training or self.hparams.entropy:
             self.supression = (2.0 / (1. + np.exp(-self.hparams.supression_decay * self.trainer.current_epoch)) - 1)
-            print(f'supression={self.supression:.2f}')
+#            print(f'supression={self.supression:.2f}')
+            # 建議寫法：紀錄超參數數值
+#            self.log('supression', self.supression, 
+#                 prog_bar=True,      # 讓它顯示在終端機進度條右側
+#                 on_step=False,      # 不要在每一步都紀錄（節省空間）
+#                 on_epoch=True,      # 每個 Epoch 結束紀錄一次平均值
+#                 sync_dist=True)     # 8 張卡同步數值
 
         if self.hparams.adversarial_training:
             self.beta = 1 * self.hparams.domain_adversary_weight
             if self.hparams.early_adversary_supression:
                 self.beta *= self.supression
-            print(f'beta={self.beta:.2f}')
-            self.discriminator.set_beta(self.beta)
+            self.discriminator.set_beta(self.beta)            
+#            print(f'beta={self.beta:.2f}')
+            # 建議寫法：紀錄超參數數值
+#            self.log('beta', self.beta, 
+#                 prog_bar=True, 
+#                 on_step=False, 
+#                 on_epoch=True, 
+#                 sync_dist=True)     
+
+    def on_train_epoch_end(self):
+        if self.trainer.is_global_zero:
+            # 取得所有已紀錄的指標
+            m = self.trainer.callback_metrics
+        
+            # 強制抓取帶有 _epoch 結尾的平均值
+            c_loss = m.get('class_loss_epoch', 0.0)
+            d_loss = m.get('domain_loss_epoch', 0.0)
+            d_acc  = m.get('discriminator_acc_epoch', 0.0)
+            e_loss = m.get('entropy_loss_epoch', 0.0)
+            sup    = m.get('supression_epoch', 0.0)
+            beta   = m.get('beta_epoch', 0.0)
+
+            # 強制將 Tensor 轉為 float
+            print(f"\n{'='*50}")
+            print(f"[Epoch {self.current_epoch:03d} Final Average] "
+                  f"Class: {float(c_loss):.4f} | "
+    	          f"Domain: {float(d_loss):.4f} | "
+                  f"DiscAcc: {float(d_acc):.2%} | "
+                  f"Entropy: {float(e_loss):.4f} | "
+                  f"Sup: {float(sup):.3f} | "
+                  f"Beta: {float(beta):.3f} ")
+            print(f"{'='*50}\n")
 
     def training_step(self, batch, batch_idx): 
 
@@ -203,14 +239,38 @@ class KWSModel(pl.LightningModule):
                 running_e_loss += e_loss.detach() / num_minibatches
 
         # log losses
-        self.log('train/class_loss', running_c_loss, batch_size=batch_size, sync_dist=True)
+        self.log('class_loss', running_c_loss, batch_size=batch_size, sync_dist=True, prog_bar=True, on_step=True, on_epoch=False)
+        self.log('class_loss_epoch', running_c_loss, batch_size=batch_size, sync_dist=True, prog_bar=False, on_step=False, on_epoch=True)
+        
         if self.hparams.adversarial_training:
-            self.log('train/domain_loss', running_d_loss, batch_size=batch_size, sync_dist=True)
+            self.log('domain_loss', running_d_loss, batch_size=batch_size, sync_dist=True, prog_bar=True, on_step=True, on_epoch=False)
+            self.log('domain_loss_epoch', running_d_loss, batch_size=batch_size, sync_dist=True, prog_bar=False, on_step=False, on_epoch=True)
+            
             # compute discriminator accuracy and log
             d_accuracy = self.accuracy(torch.cat(d_preds, dim=0), d_labels)
-            self.log('train/discriminator_acc', d_accuracy.detach(), batch_size=batch_size, sync_dist=True)
+            self.log('discriminator_acc', d_accuracy.detach(), batch_size=batch_size, sync_dist=True, prog_bar=True, on_step=True, on_epoch=False)
+            self.log('discriminator_acc_epoch', d_accuracy.detach(), batch_size=batch_size, sync_dist=True, prog_bar=False, on_step=False, on_epoch=True)
+            
         if self.hparams.entropy:
-            self.log('train/entropy_loss', running_e_loss, batch_size=batch_size, sync_dist=True)
+            self.log('entropy_loss', running_e_loss, batch_size=batch_size, sync_dist=True, prog_bar=True, on_step=True, on_epoch=False)
+            self.log('entropy_loss_epoch', running_e_loss, batch_size=batch_size, sync_dist=True, prog_bar=False, on_step=False, on_epoch=True)
+
+
+        if self.hparams.adversarial_training or self.hparams.entropy:
+            # 建議寫法：紀錄超參數數值
+            self.log('supression_epoch', self.supression, 
+                 prog_bar=False,      # 讓它顯示在終端機進度條右側
+                 on_step=False,      # 不要在每一步都紀錄（節省空間）
+                 on_epoch=True,      # 每個 Epoch 結束紀錄一次平均值
+                 sync_dist=True)     # 8 張卡同步數值
+
+        if self.hparams.adversarial_training:
+            self.beta = 1 * self.hparams.domain_adversary_weight
+            self.log('beta_epoch', self.beta, 
+                 prog_bar=False, 
+                 on_step=False, 
+                 on_epoch=True, 
+                 sync_dist=True)     
 
         # manually step optimizers in adversarial training mode
         if self.hparams.adversarial_training:

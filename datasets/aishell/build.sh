@@ -71,42 +71,71 @@ for split in "dev" "test" ; do
     mkdir -p -- "$AISHELLROOT/hotword/$split/keywords-hs/natural"
 done
 
+echo ""
+echo ""
+
 # extract the hidden states from the utterances
 echo "Extracting the hidden states of the utterances from the whisper encoder..."
+if true; then
+echo "#... This does not run."
+else
 python3 ../../src/utils.py --extract_hs -a "$AISHELLROOT/wav/train/" -t "$AISHELLROOT/kws/hs/" -w "openai/whisper-medium" -u "$AISHELLROOT/kws/positives.tsv"
 for split in "dev" "test"; do
     python3 ../../src/utils.py --extract_hs -a "$AISHELLROOT/wav/$split/" -t "$AISHELLROOT/hotword/$split/hs/" -w "openai/whisper-medium" -u "$AISHELLROOT/hotword/$split/uttid"
 done
+fi
 echo "Extraction completed."
+echo ""
 
 # extract the keywords audios from natural speech
 echo "Cutting audios to generate natural-speech-based keywords..."
+if true; then
+echo "#... This does not run."
+else
 python3 ../../src/utils.py --cut_audios -a "$AISHELLROOT/wav/train/" -k "$AISHELLROOT/kws/aligned.txt" -t "$AISHELLROOT/kws/keywords-audios/natural/"
 for split in "dev" "test"; do
     python3 ../../src/utils.py --cut_audios -a "$AISHELLROOT/wav/$split/" -k "$AISHELLROOT/hotword/$split/aligned.txt" -t "$AISHELLROOT/hotword/$split/keywords-audios/natural/"
 done
+fi
 echo "Cutting completed."
+echo ""
 
 # extract the hidden states from the natural-speech-based keywords
 echo "Extracting the hidden states of the natural-speech-based keywords from the whisper encoder..."
+if true; then
+echo "#... This does not run."
+else
 python3 ../../src/utils.py --extract_hs -a "$AISHELLROOT/kws/keywords-audios/natural/" -t "$AISHELLROOT/kws/keywords-hs/natural/" -w "openai/whisper-medium"
 for split in "dev" "test"; do
+    echo $split
     python3 ../../src/utils.py --extract_hs -a "$AISHELLROOT/hotword/$split/keywords-audios/natural/" -t "$AISHELLROOT/hotword/$split/keywords-hs/natural/" -w "openai/whisper-medium"
 done
+fi
 echo "Extraction completed."
+echo ""
 
 # use edge-tts to generate synthetic audios for the keywords
 echo "Generating synthetic audios for the keywords..."
+if false; then
+echo "#... This does not run."
+else
 python3 ../../src/utils.py --tts -k "$AISHELLROOT/kws/keywords_voice.txt" -t "$AISHELLROOT/kws/keywords-audios/tts/" -l "zh-CN"
 for split in "dev" "test"; do
     python3 ../../src/utils.py --tts -k "$AISHELLROOT/hotword/$split/hotword_voice.txt" -t "$AISHELLROOT/hotword/$split/keywords-audios/tts/" -l "zh-CN"
 done
+fi
 echo "Generation completed."
+echo ""
 
 # extract the hidden states from the tts-based keywords
 echo "Extracting the hidden states of the tts-based keywords from the whisper encoder..."
+if false; then
+echo "#... This does not run."
+else
 python3 ../../src/utils.py --extract_hs -a "$AISHELLROOT/kws/keywords-audios/tts/" -t "$AISHELLROOT/kws/keywords-hs/tts/" -w "openai/whisper-medium"
 for split in "dev" "test"; do
     python3 ../../src/utils.py --extract_hs -a "$AISHELLROOT/hotword/$split/keywords-audios/tts/" -t "$AISHELLROOT/hotword/$split/keywords-hs/tts/" -w "openai/whisper-medium"
 done
+fi
 echo "Extraction completed."
+echo ""

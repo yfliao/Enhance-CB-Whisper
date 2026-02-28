@@ -13,6 +13,8 @@ import asyncio
 import edge_tts
 import xml.etree.ElementTree as ET
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 
 async def _get_voices() -> Iterable:
     voices = await edge_tts.VoicesManager.create()
@@ -28,7 +30,7 @@ async def amain(
     await communicate.save(output_file)
 
 
-def keyword_tts(
+async def keyword_tts_async(
     tts_folder: str,
     keyword_file: str,
     locale: str,
@@ -38,8 +40,8 @@ def keyword_tts(
     assert os.path.isdir(tts_folder), f'the provided folder for storing the synthesized speech does not exist'
     assert os.path.exists(keyword_file), f'there is no file with keywords list'
 
-    # get list of already produced synthesized speech
-    tts_file_indices = [int(os.path.splitext(os.path.basename(f_name))[0]) for f_name in glob(os.path.join(tts_folder, '*.mp3'))]
+    # get list of already produced synthesized speech (only non-empty files)
+    tts_file_indices = [int(os.path.splitext(os.path.basename(f_name))[0]) for f_name in glob(os.path.join(tts_folder, '*.mp3')) if os.path.getsize(f_name) > 0]
 
     # get keywords
     with open(keyword_file, 'r') as f:
@@ -53,31 +55,67 @@ def keyword_tts(
     # remove indices of the already produced speech
     keywords = [item for item in keywords if item['idx'] not in tts_file_indices]
 
+    if not keywords:
+        return
+
     # generate audio for each keyword
-    try:
-        loop = asyncio.get_event_loop_policy().get_event_loop()
-        voices = loop.run_until_complete(_get_voices())
-        l_voices = voices.find(Locale=locale)
-        for item in tqdm(keywords):  
-            if item['voice'] == None:
-                v_ = random.choice(l_voices) if voice == None else l_voices[[v_['ShortName'] == voice for v_ in l_voices].index(True)]
-            else:
+    voices = await _get_voices()
+    l_voices = voices.find(Locale=locale)
+    
+    if not l_voices:
+        print(f"No voices found for locale {locale}")
+        return
+
+    processed_keywords = []
+    for item in tqdm(keywords):  
+        if item['voice'] == None:
+            v_ = random.choice(l_voices) if voice == None else l_voices[[v_['ShortName'] == voice for v_ in l_voices].index(True)]
+        else:
+            try:
                 v_ = l_voices[[v_['ShortName'] == item['voice'] for v_ in l_voices].index(True)]
-            item['voice'] = v_['ShortName']    
-            while True:
-                try:
-                    loop.run_until_complete(amain(item['keyword'], v_['Name'], os.path.join(tts_folder, str(item['idx']).zfill(leading_zeros) + '.mp3')))
-                except Exception as e:
-                    print(e)
-                    continue
-                finally:
-                    break
-    finally:
-        loop.close()
+            except ValueError:
+                print(f"Voice {item['voice']} not found, choosing random for {item['keyword']}")
+                v_ = random.choice(l_voices)
+        
+        item['voice'] = v_['ShortName']    
+        output_path = os.path.join(tts_folder, str(item['idx']).zfill(leading_zeros) + '.mp3')
+        
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                await amain(item['keyword'], v_['Name'], output_path)
+                processed_keywords.append(item)
+                break
+            except Exception as e:
+                print(f"Attempt {attempt + 1} failed for {item['keyword']}: {e}")
+                if attempt == max_retries - 1:
+                    print(f"Failed to generate audio for {item['keyword']} after {max_retries} attempts")
+                await asyncio.sleep(1) # wait a bit before retry
+
+    # reload all keywords to dump complete metadata
+    with open(keyword_file, 'r') as f:
+        all_keywords = [{
+            'keyword': line.split('\t')[0].strip(),
+            'voice': line.split('\t')[1].strip() if len(line.split('\t')) != 1 else None,
+            'idx': idx
+        } for idx, line in enumerate(f.readlines())]
+    
+    # update with newly assigned voices
+    for pk in processed_keywords:
+        all_keywords[pk['idx']]['voice'] = pk['voice']
 
     # dump keywords metadata with voice information
     with open(os.path.splitext(keyword_file)[0] + '_voice.txt' if 'voice' not in keyword_file else keyword_file, 'w') as f:
-        f.write('\n'.join(['\t'.join([item['keyword'], item['voice']]) for item in keywords]))
+        f.write('\n'.join(['\t'.join([item['keyword'], item['voice'] if item['voice'] is not None else '']) for item in all_keywords]))
+
+
+def keyword_tts(
+    tts_folder: str,
+    keyword_file: str,
+    locale: str,
+    voice: str = None
+):
+    asyncio.run(keyword_tts_async(tts_folder, keyword_file, locale, voice))
 
 
 def get_keywords_audios(

@@ -1,5 +1,26 @@
 import os
+# 在導入任何模組前，先設置環境變數以過濾警告
+os.environ["PYTHONWARNINGS"] = "ignore:pkg_resources is deprecated"
+
+import warnings
+# 移除 category 限制，擴大過濾範圍
+warnings.filterwarnings("ignore", message=".*pkg_resources is deprecated.*")
+warnings.filterwarnings("ignore", module="pkg_resources")
+# 直接忽略所有來自 torch.distributed 的 UserWarning
+warnings.filterwarnings("ignore", category=UserWarning, module="torch.distributed.*")
+
+import torch
+import torch.distributed as dist
+# 或者更暴力的全域忽略（僅建議測試時使用）
+# warnings.filterwarnings("ignore", message=".*device id is provided.*") 
+
+from pytorch_lightning.loggers import MLFlowLogger, CSVLogger # 1. 加入引用
+
 os.environ["OMP_NUM_THREADS"] = "2"
+
+# 針對你的 Blackwell 卡建議加上這行提升效能
+torch.set_float32_matmul_precision('high') 
+
 from pytorch_lightning.cli import LightningCLI
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
@@ -37,6 +58,14 @@ def cli_main():
         save_config_callback = None,
         subclass_mode_model = True
     )
+
+    if dist.is_initialized():
+        try:
+            dist.barrier(device_ids=[int(os.environ.get("LOCAL_RANK", 0))])
+            dist.destroy_process_group()
+        except:
+            pass # 忽略退出時的通訊錯誤
+
 
 if __name__ == '__main__':
     
