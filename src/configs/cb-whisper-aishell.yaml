@@ -39,22 +39,22 @@ trainer:
   plugins: null
   sync_batchnorm: false
   reload_dataloaders_every_n_epochs: 0
-  default_root_dir: [DEFAULT_ROOT_DIR]
+  default_root_dir: "/home/liao/Enhance-CB-Whisper/"
 data:
   class_path: data.data_module.KWSDataMod
   init_args:
     train_info: 
       - name: aishell
-        root: [AISHELL_ROOT]
+        root: "/home/liao/Enhance-CB-Whisper/corpus/data_aishell"
         kw_type: tts
     val_info:
       - name: aishell
-        root: [AISHELL_ROOT]
+        root: "/home/liao/Enhance-CB-Whisper/corpus/data_aishell"
         kw_type: tts
     test_info:
       name: aishell
-      root: [AISHELL_ROOT]
-      kw_type: [MODALITY(tts/natural)]
+      root: "/home/liao/Enhance-CB-Whisper/corpus/data_aishell"
+      kw_type: natural
     test_split: test
     features_size: 
       - 150
@@ -63,7 +63,7 @@ data:
     sampling: random
     num_workers: 8
     hotwords_per_group: 100
-    whisper_ckpt: [WHISPER_CKPT]
+    whisper_ckpt: openai/whisper-large-v2
 ckpt_path: null
 verbose: true
 model:
@@ -71,14 +71,14 @@ model:
   init_args:
     dataset: aishell
     split: test
-    root: [AISHELL_ROOT]
-    kw_type: [MODALITY(tts/natural)]
+    root: "/home/liao/Enhance-CB-Whisper/corpus/data_aishell/hotword"
+    kw_type: natural
     encoder_ckpt: openai/whisper-medium
-    whisper_ckpt: [WHISPER_CKPT]
-    kws_ckpt: [CKPT]
+    whisper_ckpt: openai/whisper-large-v2
+    kws_ckpt: "/home/liao/Enhance-CB-Whisper/750750595581882740/a75b8670fca94f1da9fdf61b7f07d5e4/checkpoints/final-epoch=49-step=56400.ckpt"
     language: chinese
-    prompt: [BIASING_PROMPT(true/false)]
-    oracle: [RETRIEVED_KEYWORDS(gold/random/kws)]
+    prompt: true
+    oracle: kws
     kws_features_size: 
       - 150
       - 750
@@ -86,4 +86,3 @@ model:
     keyword_prompt_append: "。好，那我就继续讲。"
     keyword_separator: "、"
     keywords_per_group: 100
-

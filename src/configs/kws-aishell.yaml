@@ -39,22 +39,22 @@ trainer:
   plugins: null
   sync_batchnorm: false
   reload_dataloaders_every_n_epochs: 0
-  default_root_dir: [DEFAULT_ROOT_DIR]
+  default_root_dir: "/home/liao/Enhance-CB-Whisper/"
 data:
   class_path: data.data_module.KWSDataMod
   init_args:
     train_info: 
       - name: aishell
-        root: [AISHELL_ROOT]
+        root: "/home/liao/Enhance-CB-Whisper/corpus/data_aishell"
         kw_type: tts
     val_info:
       - name: aishell
-        root: [AISHELL_ROOT]
+        root: "/home/liao/Enhance-CB-Whisper/corpus/data_aishell"
         kw_type: tts
     test_info:
       name: aishell
-      root: [AISHELL_ROOT]
-      kw_type: [MODALITY(tts/natural)]
+      root: "/home/liao/Enhance-CB-Whisper/corpus/data_aishell"
+      kw_type: natural
     test_split: test
     features_size: 
       - 150
@@ -64,14 +64,14 @@ data:
     num_workers: 8
     hotwords_per_group: 100
     whisper_ckpt: openai/whisper-large-v2
-ckpt_path: [CKPT]
+ckpt_path: "/home/liao/Enhance-CB-Whisper/750750595581882740/a75b8670fca94f1da9fdf61b7f07d5e4/checkpoints/final-epoch=49-step=56400.ckpt"
 verbose: true
 model:
   class_path: model.model.KWSModel
   init_args:
     large_heads: true
-    adversarial_training: [ADVERSARIAL_TRAINED(true/false)]
-    num_domains: [NUM_DOMAINS]
+    adversarial_training: true
+    num_domains: 2
     batch_size: 1
     accumulate_grad_batches: 1
     learning_rate: 0.00005
